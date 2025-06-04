@@ -28,13 +28,13 @@ async def make_nws_request(url: str) -> dict[str, Any] | None:
 def format_alert(feature: dict) -> str:
     """Format an alert feature into a readable string."""
     props = feature["properties"]
-    return f"""
-    Event: {props.get('event', 'Unknown')}
-    Area: {props.get('areaDesc', 'Unknown')}
-    Severity: {props.get('severity', 'Unknown')}
-    Description: {props.get('description', 'No description available')}
-    Instructions: {props.get('instruction', 'No specific instructions provided')}
-    """
+    event = props.get('event', 'Unknown')
+    area = props.get('areaDesc', 'Unknown')
+    severity = props.get('severity', 'Unknown')
+    description = props.get('description', 'No description available')
+    instruction = props.get('instruction', 'No specific instructions provided')
+    
+    return f"Event: {event}\nArea: {area}\nSeverity: {severity}\nDescription: {description}\nInstructions: {instruction}"
 
 @mcp.tool()
 async def get_alerts(state: str) -> str:
@@ -81,16 +81,26 @@ async def get_forecast(latitude: float, longitude: float) -> str:
     periods = forecast_data["properties"]["periods"]
     forecasts: list[str] = []
     for period in periods[:5]:  # Only show next 5 periods
-        forecast = f"""
-{period['name']}:
-Temperature: {period['temperature']}°{period['temperatureUnit']}
-Wind: {period['windSpeed']} {period['windDirection']}
-Forecast: {period['detailedForecast']}
-"""
+        name = period['name']
+        temp = period['temperature']
+        temp_unit = period['temperatureUnit']
+        wind_speed = period['windSpeed']
+        wind_dir = period['windDirection']
+        detailed = period['detailedForecast']
+        
+        forecast = f"{name}:\nTemperature: {temp} {temp_unit}\nWind: {wind_speed} {wind_dir}\nForecast: {detailed}"
         forecasts.append(forecast)
 
     return "\n---\n".join(forecasts)
 
 if __name__ == "__main__":
+    import sys
     # Initialize and run the server
-    mcp.run(transport='stdio')
+    # Support both stdio (local) and sse (HTTP) transports
+    transport = sys.argv[1] if len(sys.argv) > 1 else 'stdio'
+    
+    if transport == 'sse':
+        # Run as HTTP server for SSE transport
+        mcp.run(transport='sse')
+    else:
+        mcp.run(transport='stdio')
