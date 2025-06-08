@@ -1,7 +1,12 @@
+import logging
 from typing import Any
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 mcp = FastMCP("weather")
@@ -93,14 +98,28 @@ async def get_forecast(latitude: float, longitude: float) -> str:
 
     return "\n---\n".join(forecasts)
 
+def create_sse_app():
+    """Create and return the SSE app for deployment."""
+    return mcp.sse_app()
+
 if __name__ == "__main__":
+    import os
     import sys
-    # Initialize and run the server
+
+    import uvicorn
+    
     # Support both stdio (local) and sse (HTTP) transports
     transport = sys.argv[1] if len(sys.argv) > 1 else 'stdio'
     
     if transport == 'sse':
-        # Run as HTTP server for SSE transport
-        mcp.run(transport='sse')
+        # For SSE transport, use uvicorn with proper host/port binding
+        host = os.getenv('HOST', '0.0.0.0')
+        port = int(os.getenv('PORT', '8000'))
+        
+        logger.info(f"Starting MCP weather server on {host}:{port}")
+        app = mcp.sse_app()
+        uvicorn.run(app, host=host, port=port, log_level="info")
     else:
-        mcp.run(transport='stdio')
+        # For stdio transport, use the standard run method
+        logger.info("Starting MCP weather server with stdio transport")
+        mcp.run(transport=transport)
