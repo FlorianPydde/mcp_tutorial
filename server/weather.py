@@ -18,10 +18,7 @@ USER_AGENT = "weather-app/1.0"
 
 async def make_nws_request(url: str) -> dict[str, Any] | None:
     """Make a request to the NWS API with proper error handling."""
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Accept": "application/geo+json"
-    }
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/geo+json"}
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, headers=headers, timeout=30.0)
@@ -30,16 +27,18 @@ async def make_nws_request(url: str) -> dict[str, Any] | None:
         except Exception:
             return None
 
+
 def format_alert(feature: dict) -> str:
     """Format an alert feature into a readable string."""
     props = feature["properties"]
-    event = props.get('event', 'Unknown')
-    area = props.get('areaDesc', 'Unknown')
-    severity = props.get('severity', 'Unknown')
-    description = props.get('description', 'No description available')
-    instruction = props.get('instruction', 'No specific instructions provided')
-    
+    event = props.get("event", "Unknown")
+    area = props.get("areaDesc", "Unknown")
+    severity = props.get("severity", "Unknown")
+    description = props.get("description", "No description available")
+    instruction = props.get("instruction", "No specific instructions provided")
+
     return f"Event: {event}\nArea: {area}\nSeverity: {severity}\nDescription: {description}\nInstructions: {instruction}"
+
 
 @mcp.tool()
 async def get_alerts(state: str) -> str:
@@ -59,6 +58,7 @@ async def get_alerts(state: str) -> str:
 
     alerts = [format_alert(feature) for feature in data["features"]]
     return "\n---\n".join(alerts)
+
 
 @mcp.tool()
 async def get_forecast(latitude: float, longitude: float) -> str:
@@ -86,38 +86,52 @@ async def get_forecast(latitude: float, longitude: float) -> str:
     periods = forecast_data["properties"]["periods"]
     forecasts: list[str] = []
     for period in periods[:5]:  # Only show next 5 periods
-        name = period['name']
-        temp = period['temperature']
-        temp_unit = period['temperatureUnit']
-        wind_speed = period['windSpeed']
-        wind_dir = period['windDirection']
-        detailed = period['detailedForecast']
-        
+        name = period["name"]
+        temp = period["temperature"]
+        temp_unit = period["temperatureUnit"]
+        wind_speed = period["windSpeed"]
+        wind_dir = period["windDirection"]
+        detailed = period["detailedForecast"]
+
         forecast = f"{name}:\nTemperature: {temp} {temp_unit}\nWind: {wind_speed} {wind_dir}\nForecast: {detailed}"
         forecasts.append(forecast)
 
     return "\n---\n".join(forecasts)
 
+
 def create_sse_app():
     """Create and return the SSE app for deployment."""
-    return mcp.sse_app()
+    from starlette.responses import JSONResponse
+    from starlette.routing import Route
+
+    app = mcp.sse_app()
+
+    async def health_endpoint(request):
+        return JSONResponse({"status": "ok"})
+
+    # Add the health route to the existing app
+    health_route = Route("/health", endpoint=health_endpoint, methods=["GET"])
+    app.routes.append(health_route)
+
+    return app
+
 
 if __name__ == "__main__":
     import os
     import sys
 
     import uvicorn
-    
+
     # Support both stdio (local) and sse (HTTP) transports
-    transport = sys.argv[1] if len(sys.argv) > 1 else 'stdio'
-    
-    if transport == 'sse':
+    transport = sys.argv[1] if len(sys.argv) > 1 else "stdio"
+
+    if transport == "sse":
         # For SSE transport, use uvicorn with proper host/port binding
-        host = os.getenv('HOST', '0.0.0.0')
-        port = int(os.getenv('PORT', '8000'))
-        
+        host = os.getenv("HOST", "0.0.0.0")
+        port = int(os.getenv("PORT", "8000"))
+
         logger.info(f"Starting MCP weather server on {host}:{port}")
-        app = mcp.sse_app()
+        app = create_sse_app()
         uvicorn.run(app, host=host, port=port, log_level="info")
     else:
         # For stdio transport, use the standard run method
