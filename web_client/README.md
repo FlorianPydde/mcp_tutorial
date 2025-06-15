@@ -1,32 +1,44 @@
 # MCP Web Client
 
-A FastAPI-based web service that provides HTTP endpoints for interacting with the MCP weather server.
+A FastAPI-based web service that provides HTTP endpoints for interacting with MCP servers, following Model Context Protocol standards.
 
 ## Features
 
-- RESTful API endpoints for weather queries
-- Conversation memory support
-- Session management
-- Azure OpenAI integration
-- SSE connection to MCP server
+- RESTful API endpoints for MCP server interactions
+- Support for both SSE and StreamableHTTP transports
+- Conversation memory support with session management
+- Azure OpenAI integration for intelligent responses
+- Direct tool calling capabilities
 - Health checks and monitoring
 
 ## API Endpoints
 
-- `POST /chat` - Process a weather query
+### Chat Endpoints
+- `POST /chat` - Process a query without session memory
 - `POST /chat/session/{session_id}` - Process query with session memory
 - `DELETE /chat/session/{session_id}` - Clear session conversation
 - `GET /chat/session/{session_id}/stats` - Get conversation statistics
+
+### Tool Endpoints
+- `GET /tools` - List all available tools from MCP server
+- `POST /tools/{tool_name}/call` - Call a specific tool directly
+
+### System Endpoints
 - `GET /health` - Health check endpoint
+- `GET /` - API information and available endpoints
 
 ## Environment Variables
 
-Required environment variables:
+### Required Azure OpenAI Configuration
 - `AZURE_OPENAI_API_BASE` - Azure OpenAI endpoint
 - `AZURE_OPENAI_API_KEY` - Azure OpenAI API key
 - `AZURE_OPENAI_API_VERSION` - API version (e.g., "2024-02-15-preview")
 - `AZURE_OPENAI_DEPLOYMENT_NAME` - Deployment name
-- `MCP_SERVER_URL` - MCP server SSE endpoint (default: "http://localhost:8000/sse")
+
+### MCP Server Configuration
+- `MCP_SERVER_URL` - Explicit MCP server URL (optional)
+- `MCP_SERVER_PORT` - MCP server port (default: 8000)
+- `MCP_TRANSPORT_TYPE` - Transport type: "sse" or "streamable_http" (default: "sse")
 
 ## Usage
 
