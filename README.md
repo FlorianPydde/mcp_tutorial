@@ -182,15 +182,6 @@ uv run pytest
 - See `web_client/DEPLOYMENT.md` for detailed Azure deployment instructions
 - Visit [MCP Documentation](https://modelcontextprotocol.io/) for protocol details
 
-## 🤝 Contributing
-
-This project follows modern Python practices:
-- **uv** for dependency management
-- **pytest** for testing
-- **Conventional commits** for version control
-- **PEP 8** code style with 82-character line limits
-- **Type annotations** throughout
-
 ## 📄 License
 
 Open source - feel free to adapt for your own MCP implementations!
