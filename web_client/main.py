@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -16,8 +17,7 @@ from models import (
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -29,20 +29,25 @@ mcp_client: Optional[MCPWebClient] = None
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     global mcp_client
-    
+
     # Startup
     logger.info("Starting MCP Web Client application")
     try:
-        mcp_client = MCPWebClient()
+        # Get transport type from environment
+        transport_type = os.getenv("MCP_TRANSPORT_TYPE", "sse")
+        server_url = os.getenv("MCP_SERVER_URL")
+
+        logger.info(f"Initializing MCP client with transport: {transport_type}")
+        mcp_client = MCPWebClient(server_url=server_url, transport_type=transport_type)
         await mcp_client.connect_to_server()
         logger.info("Successfully connected to MCP server")
     except Exception as e:
         logger.error(f"Failed to connect to MCP server: {e}")
         # Continue startup even if MCP connection fails
         # Health endpoint will reflect the connection status
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down MCP Web Client application")
     if mcp_client:
@@ -54,7 +59,7 @@ app = FastAPI(
     title="MCP Web Client",
     description="Web service client for MCP weather tutorial",
     version="0.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -74,9 +79,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=ErrorResponse(
-            error="Internal server error",
-            detail=str(exc)
-        ).model_dump()
+            error="Internal server error", detail=str(exc)
+        ).model_dump(),
     )
 
 
@@ -88,19 +92,15 @@ async def health_check():
             return HealthResponse(
                 status="unhealthy",
                 mcp_connected=False,
-                error="MCP client not initialized"
+                error="MCP client not initialized",
             )
-        
+
         health_status = await mcp_client.health_check()
         return HealthResponse(**health_status)
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return HealthResponse(
-            status="unhealthy",
-            mcp_connected=False,
-            error=str(e)
-        )
+        return HealthResponse(status="unhealthy", mcp_connected=False, error=str(e))
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -110,17 +110,16 @@ async def chat(request: ChatRequest):
         if mcp_client is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available"
+                detail="MCP client not available",
             )
-        
+
         response = await mcp_client.process_query(request.query)
         return ChatResponse(response=response)
-        
+
     except Exception as e:
         logger.error(f"Chat processing failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -131,20 +130,16 @@ async def chat_with_session(session_id: str, request: ChatRequest):
         if mcp_client is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available"
+                detail="MCP client not available",
             )
-        
-        response = await mcp_client.process_query(
-            request.query, 
-            session_id=session_id
-        )
+
+        response = await mcp_client.process_query(request.query, session_id=session_id)
         return ChatResponse(response=response, session_id=session_id)
-        
+
     except Exception as e:
         logger.error(f"Session chat processing failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -155,25 +150,24 @@ async def clear_session(session_id: str):
         if mcp_client is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available"
+                detail="MCP client not available",
             )
-        
+
         cleared = mcp_client.clear_session(session_id)
         if cleared:
             return {"message": f"Session {session_id} cleared successfully"}
         else:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found"
+                detail=f"Session {session_id} not found",
             )
-            
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Session clearing failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -184,17 +178,59 @@ async def get_session_stats(session_id: str):
         if mcp_client is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available"
+                detail="MCP client not available",
             )
-        
+
         stats = mcp_client.get_session_stats(session_id)
         return SessionStatsResponse(**stats)
-        
+
     except Exception as e:
         logger.error(f"Session stats retrieval failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+@app.get("/tools")
+async def list_available_tools():
+    """List all available tools from the MCP server."""
+    try:
+        if mcp_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="MCP client not available",
+            )
+
+        tools = await mcp_client.list_tools()
+        return {"tools": tools}
+
+    except Exception as e:
+        logger.error(f"Failed to list tools: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+
+
+@app.post("/tools/{tool_name}/call")
+async def call_tool_directly(tool_name: str, request: dict = None):
+    """Call a specific tool directly with arguments."""
+    try:
+        if mcp_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="MCP client not available",
+            )
+
+        # Extract arguments from request body, default to empty dict
+        arguments = request or {}
+
+        result = await mcp_client.call_tool(tool_name, arguments)
+        return {"tool_name": tool_name, "arguments": arguments, "result": result}
+
+    except Exception as e:
+        logger.error(f"Failed to call tool {tool_name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
@@ -205,23 +241,20 @@ async def root():
         "name": "MCP Web Client",
         "version": "0.1.0",
         "description": "Web service client for MCP weather tutorial",
+        "transport_type": os.getenv("MCP_TRANSPORT_TYPE", "sse"),
         "endpoints": {
             "health": "/health",
             "chat": "/chat",
             "session_chat": "/chat/session/{session_id}",
             "clear_session": "/chat/session/{session_id}",
-            "session_stats": "/chat/session/{session_id}/stats"
-        }
+            "session_stats": "/chat/session/{session_id}/stats",
+            "list_tools": "/tools",
+            "call_tool": "/tools/{tool_name}/call",
+        },
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8080,
-        reload=True,
-        log_level="info"
-    )
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True, log_level="info")
