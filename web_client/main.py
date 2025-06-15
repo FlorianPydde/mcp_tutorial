@@ -21,14 +21,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global MCP client instance
+# Global MCP client instance and startup error tracking
 mcp_client: Optional[MCPWebClient] = None
+startup_error: Optional[str] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
-    global mcp_client
+    global mcp_client, startup_error
 
     # Startup
     logger.info("Starting MCP Web Client application")
@@ -38,11 +39,17 @@ async def lifespan(app: FastAPI):
         server_url = os.getenv("MCP_SERVER_URL")
 
         logger.info(f"Initializing MCP client with transport: {transport_type}")
+        logger.info(f"Target server URL: {server_url}")
+
         mcp_client = MCPWebClient(server_url=server_url, transport_type=transport_type)
         await mcp_client.connect_to_server()
         logger.info("Successfully connected to MCP server")
+        startup_error = None  # Clear any previous errors
     except Exception as e:
-        logger.error(f"Failed to connect to MCP server: {e}")
+        error_msg = f"Failed to initialize/connect to MCP server: {str(e)}"
+        logger.error(error_msg)
+        startup_error = error_msg
+        mcp_client = None
         # Continue startup even if MCP connection fails
         # Health endpoint will reflect the connection status
 
@@ -86,21 +93,34 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with detailed startup error information."""
     try:
         if mcp_client is None:
+            # Provide detailed information about why the client wasn't initialized
+            error_detail = startup_error or "MCP client not initialized"
+            logger.warning(f"Health check: MCP client is None - {error_detail}")
+
             return HealthResponse(
                 status="unhealthy",
                 mcp_connected=False,
-                error="MCP client not initialized",
+                server_url=os.getenv("MCP_SERVER_URL"),
+                error=error_detail,
             )
 
+        # Try to get health status from the MCP client
         health_status = await mcp_client.health_check()
+        logger.info(f"Health check result: {health_status}")
         return HealthResponse(**health_status)
 
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return HealthResponse(status="unhealthy", mcp_connected=False, error=str(e))
+        error_msg = f"Health check failed: {str(e)}"
+        logger.error(error_msg)
+        return HealthResponse(
+            status="unhealthy",
+            mcp_connected=False,
+            server_url=os.getenv("MCP_SERVER_URL"),
+            error=error_msg,
+        )
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -244,6 +264,7 @@ async def root():
         "transport_type": os.getenv("MCP_TRANSPORT_TYPE", "sse"),
         "endpoints": {
             "health": "/health",
+            "config": "/config",
             "chat": "/chat",
             "session_chat": "/chat/session/{session_id}",
             "clear_session": "/chat/session/{session_id}",
@@ -251,6 +272,20 @@ async def root():
             "list_tools": "/tools",
             "call_tool": "/tools/{tool_name}/call",
         },
+    }
+
+
+@app.get("/config")
+async def get_configuration():
+    """Get current configuration and environment info for debugging."""
+    return {
+        "mcp_server_url": os.getenv("MCP_SERVER_URL"),
+        "mcp_transport_type": os.getenv("MCP_TRANSPORT_TYPE", "sse"),
+        "mcp_server_port": os.getenv("MCP_SERVER_PORT", "8000"),
+        "azure_openai_configured": bool(os.getenv("AZURE_OPENAI_API_BASE")),
+        "log_level": os.getenv("LOG_LEVEL", "INFO"),
+        "client_initialized": mcp_client is not None,
+        "startup_error": startup_error,
     }
 
 

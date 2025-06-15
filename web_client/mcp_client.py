@@ -45,16 +45,27 @@ class MCPWebClient:
         # Initialize conversation memory for sessions
         self.conversation_sessions: Dict[str, List[Dict[str, Any]]] = {}
 
-        # Validate Azure OpenAI configuration
-        self._validate_azure_config()
+        # Try to initialize Azure OpenAI client, but don't fail if not configured
+        self.llm = None
+        self.deployment = None
 
-        # Initialize Azure OpenAI client
-        self.llm = AzureOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_API_BASE"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-        )
-        self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        try:
+            self._validate_azure_config()
+
+            # Initialize Azure OpenAI client
+            self.llm = AzureOpenAI(
+                azure_endpoint=os.getenv("AZURE_OPENAI_API_BASE"),
+                api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+                api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+            )
+            self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+            logger.info("Azure OpenAI client initialized successfully")
+
+        except Exception as e:
+            logger.warning(f"Azure OpenAI not configured: {e}")
+            logger.info(
+                "MCP client will work for direct tool calls, but chat functionality will be limited"
+            )
 
         logger.info(
             f"Initialized MCP client for server: {self.server_url} "
@@ -188,6 +199,12 @@ class MCPWebClient:
                 "Not connected to MCP server. Call connect_to_server() first."
             )
 
+        if self.llm is None:
+            raise RuntimeError(
+                "Azure OpenAI not configured. Cannot process chat queries. "
+                "Use direct tool calls instead via /tools/{tool_name}/call endpoints."
+            )
+
         # Get or create conversation history
         if session_id:
             self.create_session(session_id)
@@ -311,19 +328,26 @@ class MCPWebClient:
                 {"role": "assistant", "content": message.content}
             )
 
-        return "\n".join(final_text)
+        return "\n".join(
+            conversation_history[-1]["content"]
+            if "content" in conversation_history[-1]
+            else final_text
+        )
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check on the MCP client.
 
         Returns:
-            Health status dictionary
+            Health status dictionary with detailed configuration info
         """
         try:
             if self.session is None:
                 return {
                     "status": "unhealthy",
                     "mcp_connected": False,
+                    "server_url": self.server_url,
+                    "transport_type": self.transport_type,
+                    "azure_openai_configured": self.llm is not None,
                     "error": "Not connected to MCP server",
                 }
 
@@ -333,13 +357,22 @@ class MCPWebClient:
                 "status": "healthy",
                 "mcp_connected": True,
                 "server_url": self.server_url,
+                "transport_type": self.transport_type,
                 "available_tools": len(response.tools),
                 "active_sessions": len(self.conversation_sessions),
+                "azure_openai_configured": self.llm is not None,
             }
 
         except Exception as e:
             logger.error(f"Health check failed: {e}")
-            return {"status": "unhealthy", "mcp_connected": False, "error": str(e)}
+            return {
+                "status": "unhealthy",
+                "mcp_connected": False,
+                "server_url": self.server_url,
+                "transport_type": self.transport_type,
+                "azure_openai_configured": self.llm is not None,
+                "error": str(e),
+            }
 
     async def cleanup(self) -> None:
         """Clean up resources.
