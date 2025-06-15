@@ -328,10 +328,10 @@ class MCPWebClient:
                 {"role": "assistant", "content": message.content}
             )
 
-        return "\n".join(
+        return (
             conversation_history[-1]["content"]
             if "content" in conversation_history[-1]
-            else final_text
+            else "\n".join(final_text)
         )
 
     async def health_check(self) -> Dict[str, Any]:
