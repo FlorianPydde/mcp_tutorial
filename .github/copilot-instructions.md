@@ -54,3 +54,7 @@
 - Write comments in English.
 - Keep comments up to date.
 - **Ensure comments are updated promptly to reflect any code changes.**
+
+## Terminal Commands
+- use powershell commands for terminal interactions.
+- Use uv for running python code.
