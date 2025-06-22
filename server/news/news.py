@@ -365,116 +365,25 @@ API Key Setup:
 """
 
 
-def create_sse_app():
-    """Create and return the SSE app for deployment.
-
-    Following MCP SDK patterns for SSE transport configuration.
-    Includes health endpoint for monitoring and proper app structure.
-
-    Returns:
-        Configured ASGI application for SSE transport
-    """
-    from starlette.responses import JSONResponse
-    from starlette.routing import Route
-
-    # Get the SSE app from FastMCP
-    app = mcp.sse_app()
-
-    async def health_endpoint(request):
-        """Health check endpoint for monitoring and load balancing."""
-        api_key_configured = bool(NEWS_API_KEY)
-        return JSONResponse(
-            {
-                "status": "healthy" if api_key_configured else "degraded",
-                "service": "news-mcp-server",
-                "transport": "sse",
-                "version": "1.0.0",
-                "api_key_configured": api_key_configured,
-                "warning": None
-                if api_key_configured
-                else "NEWS_API_KEY not configured - server will not function properly",
-            }
-        )
-
-    # Add health route to the existing app routes
-    health_route = Route("/health", endpoint=health_endpoint, methods=["GET"])
-    app.routes.append(health_route)
-
-    logger.info("SSE app configured with health endpoint")
-    return app
-
-
-def create_streamable_http_app():
-    """Create and return the Streamable HTTP app for deployment.
-
-    Following MCP SDK patterns for Streamable HTTP transport configuration.
-    This is the recommended transport for production deployments.
-
-    Returns:
-        Configured ASGI application for Streamable HTTP transport
-    """
-    from starlette.responses import JSONResponse
-    from starlette.routing import Route
-
-    # Get the Streamable HTTP app from FastMCP
-    app = mcp.streamable_http_app()
-
-    async def health_endpoint(request):
-        """Health check endpoint for monitoring and load balancing."""
-        api_key_configured = bool(NEWS_API_KEY)
-        return JSONResponse(
-            {
-                "status": "healthy" if api_key_configured else "degraded",
-                "service": "news-mcp-server",
-                "transport": "streamable-http",
-                "version": "1.0.0",
-                "api_key_configured": api_key_configured,
-                "warning": None
-                if api_key_configured
-                else "NEWS_API_KEY not configured - server will not function properly",
-            }
-        )
-
-    # Add health route
-    health_route = Route("/health", endpoint=health_endpoint, methods=["GET"])
-    app.routes.append(health_route)
-
-    logger.info("Streamable HTTP app configured with health endpoint")
-    return app
-
-
 if __name__ == "__main__":
     import sys
-
     import uvicorn
 
     # Support multiple transports following MCP SDK patterns
     transport = sys.argv[1] if len(sys.argv) > 1 else "stdio"
 
     logger.info(f"Starting news MCP server with {transport} transport")
-
-    if transport == "sse":
-        # SSE transport for HTTP-based connections
+    
+    if transport == "streamable-http":
+        # Streamable HTTP transport (recommended for production)
         host = os.getenv("HOST", "0.0.0.0")
         port = int(os.getenv("PORT", "8001"))  # Different port from weather server
 
-        logger.info(f"Starting MCP news server (SSE) on {host}:{port}")
-        logger.info("SSE endpoint will be available at /sse")
-        logger.info("Health check endpoint will be available at /health")
-
-        app = create_sse_app()
-        uvicorn.run(app, host=host, port=port, log_level="info", access_log=True)
-
-    elif transport == "streamable-http":
-        # Streamable HTTP transport (recommended for production)
-        host = os.getenv("HOST", "0.0.0.0")
-        port = int(os.getenv("PORT", "8001"))
-
         logger.info(f"Starting MCP news server (Streamable HTTP) on {host}:{port}")
-        logger.info("Streamable HTTP endpoint will be available at /mcp")
-        logger.info("Health check endpoint will be available at /health")
+        logger.info("MCP endpoint will be available at /mcp")
 
-        app = create_streamable_http_app()
+        # Use FastMCP's streamable_http_app() with Uvicorn (working pattern)
+        app = mcp.streamable_http_app()
         uvicorn.run(app, host=host, port=port, log_level="info", access_log=True)
 
     else:

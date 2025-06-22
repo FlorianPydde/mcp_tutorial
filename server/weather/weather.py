@@ -6,9 +6,11 @@ using the National Weather Service API. Follows MCP SDK best practices
 for server implementation, error handling, and transport configuration.
 """
 
+import asyncio
 import logging
 import os
-from typing import Any, Dict
+import sys
+from typing import Any, Dict, List
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -365,7 +367,6 @@ async def get_current_conditions(latitude: float, longitude: float) -> str:
         return f"Error retrieving current conditions for location ({latitude}, {longitude}). Please try again."
 
 
-@mcp.resource("weather://service/info")
 def get_service_info() -> str:
     """Provide information about the weather service capabilities.
 
@@ -398,7 +399,6 @@ Usage Notes:
 """
 
 
-@mcp.resource("weather://states/codes")
 def get_state_codes() -> str:
     """Provide a reference of US state codes for weather alerts.
 
@@ -430,74 +430,6 @@ Usage: get_alerts("CA") for California alerts, get_alerts("PR") for Puerto Rico 
 """
 
 
-def create_sse_app():
-    """Create and return the SSE app for deployment.
-
-    Following MCP SDK patterns for SSE transport configuration.
-    Includes health endpoint for monitoring and proper app structure.
-
-    Returns:
-        Configured ASGI application for SSE transport
-    """
-    from starlette.responses import JSONResponse
-    from starlette.routing import Route
-
-    # Get the SSE app from FastMCP
-    app = mcp.sse_app()
-
-    async def health_endpoint(request):
-        """Health check endpoint for monitoring and load balancing."""
-        return JSONResponse(
-            {
-                "status": "healthy",
-                "service": "weather-mcp-server",
-                "transport": "sse",
-                "version": "1.0.0",
-            }
-        )
-
-    # Add health route to the existing app routes
-    health_route = Route("/health", endpoint=health_endpoint, methods=["GET"])
-    app.routes.append(health_route)
-
-    logger.info("SSE app configured with health endpoint")
-    return app
-
-
-def create_streamable_http_app():
-    """Create and return the Streamable HTTP app for deployment.
-
-    Following MCP SDK patterns for Streamable HTTP transport configuration.
-    This is the recommended transport for production deployments.
-
-    Returns:
-        Configured ASGI application for Streamable HTTP transport
-    """
-    from starlette.responses import JSONResponse
-    from starlette.routing import Route
-
-    # Get the Streamable HTTP app from FastMCP
-    app = mcp.streamable_http_app()
-
-    async def health_endpoint(request):
-        """Health check endpoint for monitoring and load balancing."""
-        return JSONResponse(
-            {
-                "status": "healthy",
-                "service": "weather-mcp-server",
-                "transport": "streamable-http",
-                "version": "1.0.0",
-            }
-        )
-
-    # Add health route
-    health_route = Route("/health", endpoint=health_endpoint, methods=["GET"])
-    app.routes.append(health_route)
-
-    logger.info("Streamable HTTP app configured with health endpoint")
-    return app
-
-
 if __name__ == "__main__":
     import sys
 
@@ -508,28 +440,17 @@ if __name__ == "__main__":
 
     logger.info(f"Starting weather MCP server with {transport} transport")
 
-    if transport == "sse":
-        # SSE transport for HTTP-based connections
-        host = os.getenv("HOST", "0.0.0.0")
-        port = int(os.getenv("PORT", "8000"))
-
-        logger.info(f"Starting MCP weather server (SSE) on {host}:{port}")
-        logger.info("SSE endpoint will be available at /sse")
-        logger.info("Health check endpoint will be available at /health")
-
-        app = create_sse_app()
-        uvicorn.run(app, host=host, port=port, log_level="info", access_log=True)
-
-    elif transport == "streamable-http":
-        # Streamable HTTP transport (recommended for production)
+    if (
+        transport == "streamable-http"
+    ):  # Streamable HTTP transport (recommended for production)
         host = os.getenv("HOST", "0.0.0.0")
         port = int(os.getenv("PORT", "8000"))
 
         logger.info(f"Starting MCP weather server (Streamable HTTP) on {host}:{port}")
-        logger.info("Streamable HTTP endpoint will be available at /mcp")
-        logger.info("Health check endpoint will be available at /health")
+        logger.info("MCP endpoint will be available at /mcp")
 
-        app = create_streamable_http_app()
+        # Use FastMCP's streamable_http_app() with Uvicorn (working pattern)
+        app = mcp.streamable_http_app()
         uvicorn.run(app, host=host, port=port, log_level="info", access_log=True)
 
     else:

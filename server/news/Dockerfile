@@ -28,5 +28,5 @@ EXPOSE 8001
 ENV HOST=0.0.0.0
 ENV PORT=8001
 
-# Run the MCP server with SSE transport using uv
-CMD ["uv", "run", "python", "news.py", "sse"]
+# Run the MCP server with streamable HTTP transport using uv (enterprise-ready)
+CMD ["uv", "run", "python", "news.py", "streamable-http"]
