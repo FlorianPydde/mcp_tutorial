@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y \
 # Install uv
 RUN pip install uv
 
-# Copy dependency files
-COPY pyproject.toml ./
+# Copy dependency files and README first (required by pyproject.toml)
+COPY pyproject.toml uv.lock* README.md ./
 
 # Install dependencies
-RUN uv pip install --system -e .
+RUN uv sync --frozen
 
 # Copy source code
 COPY . .
@@ -33,4 +33,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the gateway
-CMD ["python", "-m", "mcp_gateway.main"]
+CMD ["uv", "run", "-m", "mcp_gateway.main"]
