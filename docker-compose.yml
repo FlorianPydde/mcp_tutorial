@@ -1,0 +1,87 @@
+services:
+  # Weather MCP Server
+  weather-server:
+    build:
+      context: ./server/weather
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-network
+
+  # News MCP Server  
+  news-server:
+    build:
+      context: ./server/news
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-network
+
+  # MCP Gateway
+  mcp-gateway:
+    build:
+      context: ./mcp_gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8080
+      - DEBUG=false
+      - MCP_SERVERS__WEATHER__HOST=weather-server
+      - MCP_SERVERS__WEATHER__PORT=8000
+      - MCP_SERVERS__NEWS__HOST=news-server
+      - MCP_SERVERS__NEWS__PORT=8000
+    depends_on:
+      - weather-server
+      - news-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-network
+
+  # Web Client
+  web-client:
+    build:
+      context: ./web_client
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - MCP_GATEWAY_URL=http://mcp-gateway:8080
+      - WEB_CLIENT_HOST=0.0.0.0
+      - WEB_CLIENT_PORT=3000
+    depends_on:
+      - mcp-gateway
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
