@@ -1,9 +1,9 @@
 [project]
-name = "mcp-web-client"
-version = "0.1.0"
-description = "Web service client for MCP weather tutorial"
+name = "mcp-gateway-web-client"
+version = "1.0.0"
+description = "Web service client for MCP Gateway - Enterprise team client"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",

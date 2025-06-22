@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from mcp_client import MCPWebClient
+from mcp_gateway_client import MCPGatewayClient
 from models import (
     ChatRequest,
     ChatResponse,
@@ -21,51 +21,46 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global MCP client instance and startup error tracking
-mcp_client: Optional[MCPWebClient] = None
+# Global MCP gateway client instance and startup error tracking
+mcp_client: Optional[MCPGatewayClient] = None
 startup_error: Optional[str] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
-    global mcp_client, startup_error
-
-    # Startup
-    logger.info("Starting MCP Web Client application")
+    global mcp_client, startup_error  # Startup
+    logger.info("Starting MCP Web Client application (Gateway mode)")
     try:
-        # Get transport type from environment
-        transport_type = os.getenv("MCP_TRANSPORT_TYPE", "sse")
-        server_url = os.getenv("MCP_SERVER_URL")
+        # Get gateway configuration from environment
+        gateway_url = os.getenv("MCP_GATEWAY_URL")
 
-        logger.info(f"Initializing MCP client with transport: {transport_type}")
-        logger.info(f"Target server URL: {server_url}")
+        logger.info("Initializing MCP Gateway client")
+        logger.info(f"Target gateway URL: {gateway_url or 'localhost:8080'}")
 
-        mcp_client = MCPWebClient(server_url=server_url, transport_type=transport_type)
-        await mcp_client.connect_to_server()
-        logger.info("Successfully connected to MCP server")
+        mcp_client = MCPGatewayClient(gateway_url=gateway_url)
+        await mcp_client.connect()
+        logger.info("Successfully connected to MCP Gateway")
         startup_error = None  # Clear any previous errors
     except Exception as e:
-        error_msg = f"Failed to initialize/connect to MCP server: {str(e)}"
+        error_msg = f"Failed to initialize/connect to MCP Gateway: {str(e)}"
         logger.error(error_msg)
         startup_error = error_msg
         mcp_client = None
         # Continue startup even if MCP connection fails
         # Health endpoint will reflect the connection status
 
-    yield
-
-    # Shutdown
+    yield  # Shutdown
     logger.info("Shutting down MCP Web Client application")
     if mcp_client:
-        await mcp_client.cleanup()
+        await mcp_client.disconnect()
 
 
 # Create FastAPI application
 app = FastAPI(
-    title="MCP Web Client",
-    description="Web service client for MCP weather tutorial",
-    version="0.1.0",
+    title="MCP Gateway Web Client",
+    description="Web service client for MCP Gateway - Enterprise ready team client",
+    version="1.0.0",
     lifespan=lifespan,
 )
 

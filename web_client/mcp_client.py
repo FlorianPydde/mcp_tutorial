@@ -5,6 +5,7 @@ from contextlib import AsyncExitStack
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
+import httpx
 from dotenv import load_dotenv
 from mcp import ClientSession
 from mcp.client.sse import sse_client
@@ -18,29 +19,39 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
-class MCPWebClient:
-    """Web service client for MCP server interactions following tutorial standards."""
+class MCPGatewayClient:
+    """Web service client for MCP Gateway interactions."""
 
-    def __init__(self, server_url: Optional[str] = None, transport_type: str = "sse"):
-        """Initialize the MCP web client.
+    def __init__(
+        self,
+        gateway_url: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+    ):
+        """Initialize the MCP Gateway client.
 
         Args:
-            server_url: MCP server endpoint URL
-            transport_type: Transport type ('sse' or 'streamable_http')
+            gateway_url: MCP Gateway endpoint URL
+            username: Username for authentication
+            password: Password for authentication
         """
         self.session: Optional[ClientSession] = None
-        self.exit_stack = AsyncExitStack()  # For persistent web service connections
-        self.transport_type = transport_type
+        self.exit_stack = AsyncExitStack()
 
-        # Configure server URL based on transport type
-        if server_url:
-            self.server_url = server_url
+        # Configure gateway URL
+        if gateway_url:
+            self.gateway_url = gateway_url
         else:
-            server_port = os.getenv("MCP_SERVER_PORT", "8000")
-            if transport_type == "streamable_http":
-                self.server_url = f"http://localhost:{server_port}/mcp"
-            else:  # Default to SSE
-                self.server_url = f"http://localhost:{server_port}/sse"
+            gateway_port = os.getenv("MCP_GATEWAY_PORT", "8080")
+            self.gateway_url = f"http://localhost:{gateway_port}"
+
+        # Authentication
+        self.username = username or os.getenv("MCP_USERNAME", "team_a")
+        self.password = password or os.getenv("MCP_PASSWORD", "team_a123")
+        self.access_token: Optional[str] = None
+
+        # HTTP client for API calls
+        self.http_client: Optional[httpx.AsyncClient] = None
 
         # Initialize conversation memory for sessions
         self.conversation_sessions: Dict[str, List[Dict[str, Any]]] = {}
@@ -69,7 +80,7 @@ class MCPWebClient:
 
         logger.info(
             f"Initialized MCP client for server: {self.server_url} "
-            f"(transport: {transport_type})"
+            f"(transport: {self.transport_type})"
         )
 
     def _validate_azure_config(self) -> None:
