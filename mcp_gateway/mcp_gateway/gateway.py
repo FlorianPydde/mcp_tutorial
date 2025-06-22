@@ -117,9 +117,8 @@ class MCPGateway:
                     detail=f"Server {server_name} not found",
                 )
 
-            return health.to_dict()
+            return health.to_dict()  # Tool discovery routes
 
-        # Tool discovery routes
         @self.app.get("/tools")
         async def list_tools():
             """List all available tools."""
@@ -280,12 +279,12 @@ class MCPGateway:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Tool {tool_name} not found",
-            )  # Check if server is healthy (temporarily disabled for testing)
-        # if not self.health_monitor.is_server_healthy(server_name):
-        #     raise HTTPException(
-        #         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        #         detail=f"Server {server_name} is not healthy",
-        #     )
+            )  # Check if server is healthy
+        if not self.health_monitor.is_server_healthy(server_name):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Server {server_name} is not healthy",
+            )
 
         # Get server configuration
         server_config = settings.mcp_servers.get(server_name)

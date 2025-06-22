@@ -378,14 +378,26 @@ if __name__ == "__main__":
     if transport == "streamable-http":
         # Streamable HTTP transport (recommended for production)
         host = os.getenv("HOST", "0.0.0.0")
-        port = int(os.getenv("PORT", "8001"))  # Different port from weather server
+        port = int(os.getenv("PORT", "8000"))  # Use PORT environment variable
 
         logger.info(f"Starting MCP news server (Streamable HTTP) on {host}:{port}")
         logger.info("MCP endpoint will be available at /mcp")
 
-        # Use FastMCP's streamable_http_app() with Uvicorn (working pattern)
-        app = mcp.streamable_http_app()
-        uvicorn.run(app, host=host, port=port, log_level="info", access_log=True)
+        # Use uvicorn with FastMCP app directly (production pattern)
+        starlette_app = mcp.streamable_http_app()
+
+        config = uvicorn.Config(
+            starlette_app,
+            host=host,
+            port=port,
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+
+        # Run with proper async context
+        import asyncio
+
+        asyncio.run(server.serve())
 
     else:
         # stdio transport for local/desktop integration

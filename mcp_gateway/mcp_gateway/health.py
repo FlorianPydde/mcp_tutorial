@@ -132,11 +132,10 @@ class HealthMonitor:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _check_server_health(
-        self, server_name: str, config: MCPServerConfig
-    ) -> None:
+        self, server_name: str, config: MCPServerConfig    ) -> None:
         """Check health of a single server."""
         start_time = asyncio.get_event_loop().time()
-
+        
         try:
             # First try HTTP health endpoint
             success = await self._check_http_health(config)
@@ -151,7 +150,6 @@ class HealthMonitor:
                 logger.debug(f"Server {server_name} is healthy")
             else:
                 self.server_health[server_name].update_unhealthy("Health check failed")
-
         except Exception as e:
             error_msg = f"Health check error: {str(e)}"
             self.server_health[server_name].update_unhealthy(error_msg)
@@ -165,7 +163,7 @@ class HealthMonitor:
         try:
             url = f"http://{config.host}:{config.port}{config.health_endpoint}"
             response = await self.http_client.get(url)
-            return response.status_code == 200
+            return response.status_code in [200, 406]  # 406 is OK for MCP streamable endpoints
         except Exception as e:
             logger.debug(f"HTTP health check failed for {config.name}: {e}")
             return False
@@ -179,11 +177,9 @@ class HealthMonitor:
             url = f"http://{config.host}:{config.port}{config.mcp_endpoint}"
 
             if not self.http_client:
-                return False
-
-            # Try to connect to MCP endpoint
+                return False            # Try to connect to MCP endpoint
             response = await self.http_client.get(url)
-            return response.status_code in [200, 404]  # 404 is OK for MCP endpoints
+            return response.status_code in [200, 404, 406]  # 406 is OK for MCP streamable endpoints
         except Exception as e:
             logger.debug(f"MCP health check failed for {config.name}: {e}")
             return False
