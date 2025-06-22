@@ -15,8 +15,8 @@ COPY pyproject.toml uv.lock* ./
 # Install uv for faster dependency management
 RUN pip install uv
 
-# Install project and dependencies using uv pip install
-RUN uv pip install --system -e .
+# Install project and dependencies using uv sync
+RUN uv sync --frozen
 
 # Copy application code
 COPY news.py ./
@@ -28,5 +28,5 @@ EXPOSE 8001
 ENV HOST=0.0.0.0
 ENV PORT=8001
 
-# Run the MCP server with SSE transport using Python directly
-CMD ["python", "news.py", "sse"]
+# Run the MCP server with SSE transport using uv
+CMD ["uv", "run", "python", "news.py", "sse"]

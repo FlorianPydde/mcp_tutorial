@@ -15,8 +15,8 @@ COPY pyproject.toml uv.lock* ./
 # Install uv for faster dependency management
 RUN pip install uv
 
-# Install project and dependencies using uv pip install
-RUN uv pip install --system -e .
+# Install project and dependencies using uv sync
+RUN uv sync --frozen
 
 # Copy application code
 COPY weather.py ./
@@ -28,5 +28,5 @@ EXPOSE 8000
 ENV HOST=0.0.0.0
 ENV PORT=8000
 
-# Run the MCP server with SSE transport using Python directly
-CMD ["python", "weather.py", "sse"]
+# Run the MCP server with streamable HTTP transport using uv (enterprise-ready)
+CMD ["uv", "run", "python", "weather.py", "streamable-http"]
