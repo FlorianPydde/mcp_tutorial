@@ -367,13 +367,14 @@ API Key Setup:
 
 if __name__ == "__main__":
     import sys
+
     import uvicorn
 
     # Support multiple transports following MCP SDK patterns
     transport = sys.argv[1] if len(sys.argv) > 1 else "stdio"
 
     logger.info(f"Starting news MCP server with {transport} transport")
-    
+
     if transport == "streamable-http":
         # Streamable HTTP transport (recommended for production)
         host = os.getenv("HOST", "0.0.0.0")
