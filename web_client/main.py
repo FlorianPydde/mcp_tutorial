@@ -1,3 +1,7 @@
+"""
+Simplified MCP Web Client using direct MCP protocol connections.
+"""
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -6,13 +10,12 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from mcp_gateway_client import MCPGatewayClient
+from mcp_client import DirectMCPClient
 from models import (
     ChatRequest,
     ChatResponse,
     ErrorResponse,
     HealthResponse,
-    SessionStatsResponse,
 )
 
 # Configure logging
@@ -21,45 +24,41 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global MCP gateway client instance and startup error tracking
-mcp_client: Optional[MCPGatewayClient] = None
+# Global MCP client instance
+mcp_client: Optional[DirectMCPClient] = None
 startup_error: Optional[str] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
-    global mcp_client, startup_error  # Startup
-    logger.info("Starting MCP Web Client application (Gateway mode)")
+    global mcp_client, startup_error
+
+    # Startup
+    logger.info("Starting MCP Web Client application (Direct MCP mode)")
     try:
-        # Get gateway configuration from environment
-        gateway_url = os.getenv("MCP_GATEWAY_URL")
-
-        logger.info("Initializing MCP Gateway client")
-        logger.info(f"Target gateway URL: {gateway_url or 'localhost:8080'}")
-
-        mcp_client = MCPGatewayClient(gateway_url=gateway_url)
+        mcp_client = DirectMCPClient()
         await mcp_client.connect()
-        logger.info("Successfully connected to MCP Gateway")
-        startup_error = None  # Clear any previous errors
+        logger.info("Successfully connected to MCP servers")
+        startup_error = None
     except Exception as e:
-        error_msg = f"Failed to initialize/connect to MCP Gateway: {str(e)}"
+        error_msg = f"Failed to connect to MCP servers: {str(e)}"
         logger.error(error_msg)
         startup_error = error_msg
         mcp_client = None
-        # Continue startup even if MCP connection fails
-        # Health endpoint will reflect the connection status
 
-    yield  # Shutdown
+    yield
+
+    # Shutdown
     logger.info("Shutting down MCP Web Client application")
     if mcp_client:
         await mcp_client.disconnect()
 
 
-# Create FastAPI application
+# Initialize FastAPI application
 app = FastAPI(
-    title="MCP Gateway Web Client",
-    description="Web service client for MCP Gateway - Enterprise ready team client",
+    title="MCP Web Client",
+    description="Web interface for Model Context Protocol servers",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -67,7 +66,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,176 +76,14 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Global exception handler."""
-    logger.error(f"Unhandled exception: {exc}")
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=ErrorResponse(
-            error="Internal server error", detail=str(exc)
+            error="Internal server error",
+            details=str(exc),
         ).model_dump(),
     )
-
-
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint with detailed startup error information."""
-    try:
-        if mcp_client is None:
-            # Provide detailed information about why the client wasn't initialized
-            error_detail = startup_error or "MCP client not initialized"
-            logger.warning(f"Health check: MCP client is None - {error_detail}")
-
-            return HealthResponse(
-                status="unhealthy",
-                mcp_connected=False,
-                server_url=os.getenv("MCP_SERVER_URL"),
-                error=error_detail,
-            )
-
-        # Try to get health status from the MCP client
-        health_status = await mcp_client.health_check()
-        logger.info(f"Health check result: {health_status}")
-        return HealthResponse(**health_status)
-
-    except Exception as e:
-        error_msg = f"Health check failed: {str(e)}"
-        logger.error(error_msg)
-        return HealthResponse(
-            status="unhealthy",
-            mcp_connected=False,
-            server_url=os.getenv("MCP_SERVER_URL"),
-            error=error_msg,
-        )
-
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """Process a chat query without session memory."""
-    try:
-        if mcp_client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available",
-            )
-
-        response = await mcp_client.process_query(request.query)
-        return ChatResponse(response=response)
-
-    except Exception as e:
-        logger.error(f"Chat processing failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@app.post("/chat/session/{session_id}", response_model=ChatResponse)
-async def chat_with_session(session_id: str, request: ChatRequest):
-    """Process a chat query with session-based conversation memory."""
-    try:
-        if mcp_client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available",
-            )
-
-        response = await mcp_client.process_query(request.query, session_id=session_id)
-        return ChatResponse(response=response, session_id=session_id)
-
-    except Exception as e:
-        logger.error(f"Session chat processing failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@app.delete("/chat/session/{session_id}")
-async def clear_session(session_id: str):
-    """Clear conversation history for a session."""
-    try:
-        if mcp_client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available",
-            )
-
-        cleared = mcp_client.clear_session(session_id)
-        if cleared:
-            return {"message": f"Session {session_id} cleared successfully"}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session {session_id} not found",
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Session clearing failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@app.get("/chat/session/{session_id}/stats", response_model=SessionStatsResponse)
-async def get_session_stats(session_id: str):
-    """Get conversation statistics for a session."""
-    try:
-        if mcp_client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available",
-            )
-
-        stats = mcp_client.get_session_stats(session_id)
-        return SessionStatsResponse(**stats)
-
-    except Exception as e:
-        logger.error(f"Session stats retrieval failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@app.get("/tools")
-async def list_available_tools():
-    """List all available tools from the MCP server."""
-    try:
-        if mcp_client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available",
-            )
-
-        tools = await mcp_client.list_tools()
-        return {"tools": tools}
-
-    except Exception as e:
-        logger.error(f"Failed to list tools: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
-
-
-@app.post("/tools/{tool_name}/call")
-async def call_tool_directly(tool_name: str, request: dict = None):
-    """Call a specific tool directly with arguments."""
-    try:
-        if mcp_client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="MCP client not available",
-            )
-
-        # Extract arguments from request body, default to empty dict
-        arguments = request or {}
-
-        result = await mcp_client.call_tool(tool_name, arguments)
-        return {"tool_name": tool_name, "arguments": arguments, "result": result}
-
-    except Exception as e:
-        logger.error(f"Failed to call tool {tool_name}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
 
 
 @app.get("/")
@@ -254,37 +91,110 @@ async def root():
     """Root endpoint with API information."""
     return {
         "name": "MCP Web Client",
-        "version": "0.1.0",
-        "description": "Web service client for MCP weather tutorial",
-        "transport_type": os.getenv("MCP_TRANSPORT_TYPE", "sse"),
+        "version": "1.0.0",
+        "description": "Web interface for Model Context Protocol servers",
         "endpoints": {
-            "health": "/health",
-            "config": "/config",
-            "chat": "/chat",
-            "session_chat": "/chat/session/{session_id}",
-            "clear_session": "/chat/session/{session_id}",
-            "session_stats": "/chat/session/{session_id}/stats",
-            "list_tools": "/tools",
-            "call_tool": "/tools/{tool_name}/call",
+            "/health": "Health check endpoint",
+            "/config": "Server configuration information",
+            "/tools": "List all available MCP tools",
+            "/tools/call": "Call a specific MCP tool",
         },
     }
 
 
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    """Health check endpoint."""
+    if startup_error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Service unavailable: {startup_error}",
+        )
+
+    if not mcp_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MCP client not initialized",
+        )
+
+    return HealthResponse(
+        status="healthy",
+        mcp_connected=mcp_client.connected,
+        message="MCP Web Client is running",
+    )
+
+
 @app.get("/config")
-async def get_configuration():
-    """Get current configuration and environment info for debugging."""
-    return {
-        "mcp_server_url": os.getenv("MCP_SERVER_URL"),
-        "mcp_transport_type": os.getenv("MCP_TRANSPORT_TYPE", "sse"),
-        "mcp_server_port": os.getenv("MCP_SERVER_PORT", "8000"),
-        "azure_openai_configured": bool(os.getenv("AZURE_OPENAI_API_BASE")),
-        "log_level": os.getenv("LOG_LEVEL", "INFO"),
-        "client_initialized": mcp_client is not None,
-        "startup_error": startup_error,
-    }
+async def get_config():
+    """Get server configuration."""
+    if not mcp_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MCP client not initialized",
+        )
+
+    return mcp_client.get_server_info()
+
+
+@app.get("/tools")
+async def get_tools():
+    """Get all available tools from MCP servers."""
+    if not mcp_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MCP client not initialized",
+        )
+
+    try:
+        tools = await mcp_client.get_tools()
+        return {
+            "tools": tools,
+            "total": len(tools),
+        }
+    except Exception as e:
+        logger.error(f"Error getting tools: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get tools: {str(e)}",
+        )
+
+
+@app.post("/tools/call")
+async def call_tool(request: dict):
+    """Call a specific tool."""
+    if not mcp_client:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MCP client not initialized",
+        )
+
+    try:
+        server_name = request.get("server_name")
+        tool_name = request.get("tool_name")
+        arguments = request.get("arguments", {})
+
+        if not server_name or not tool_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="server_name and tool_name are required",
+            )
+
+        result = await mcp_client.call_tool(server_name, tool_name, arguments)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error calling tool: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to call tool: {str(e)}",
+        )
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True, log_level="info")
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "3000"))
+
+    logger.info(f"Starting MCP Web Client on {host}:{port}")
+    uvicorn.run(app, host=host, port=port)

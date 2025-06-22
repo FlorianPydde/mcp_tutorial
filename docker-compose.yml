@@ -58,7 +58,6 @@ services:  # Weather MCP Server
       retries: 3
     networks:
       - mcp-network
-
   # Web Client
   web-client:
     build:
@@ -67,11 +66,13 @@ services:  # Weather MCP Server
     ports:
       - "3000:3000"
     environment:
-      - MCP_GATEWAY_URL=http://mcp-gateway:8080
-      - WEB_CLIENT_HOST=0.0.0.0
-      - WEB_CLIENT_PORT=3000
+      - WEATHER_SERVER_URL=http://weather-server:8000/mcp
+      - NEWS_SERVER_URL=http://news-server:8000/mcp
+      - HOST=0.0.0.0
+      - PORT=3000
     depends_on:
-      - mcp-gateway
+      - weather-server
+      - news-server
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
