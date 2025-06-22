@@ -1,0 +1,12 @@
+[project]
+name = "news-mcp-server"
+version = "0.1.0"
+description = "News MCP Server using NewsAPI.org"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.9.2",
+    "uvicorn>=0.30.0",
+    "fastapi>=0.115.0",
+]
