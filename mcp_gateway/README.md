@@ -1,42 +1,41 @@
 # MCP Gateway
 
-Enterprise-ready MCP (Model Context Protocol) Gateway that provides a centralized routing layer for multiple MCP servers. The gateway acts as both an MCP client (to backend servers) and MCP server (to frontend clients), enabling teams to connect to a single endpoint while providing robust health monitoring, authentication, and tool discovery.
+Enterprise-ready MCP (Model Context Protocol) Gateway that provides a centralized routing layer for multiple MCP servers. The gateway acts as both an MCP client (to backend servers) and MCP server (to frontend clients), enabling teams to connect to a single endpoint while providing robust health monitoring and tool discovery.
 
 ## Features
 
 - **Centralized Routing**: Single endpoint for multiple MCP servers
 - **Dynamic Tool Discovery**: Automatic discovery and registration of tools from backend servers
 - **Health Monitoring**: Real-time health checks of all backend MCP servers
-- **Authentication & Authorization**: JWT-based auth with role-based access control
 - **MCP Protocol Compliant**: Fully compliant with MCP protocol specifications
 - **Real-time Updates**: Tool registry updates and health status monitoring
-- **Permission Management**: Fine-grained control over tool and server access
 - **Enterprise Ready**: Logging, monitoring, and deployment-ready
+- **Simplified Architecture**: No authentication required for easy setup and testing
 
 ## Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Team Client   │    │   Team Client   │    │   Team Client   │
-│     (Team A)    │    │     (Team B)    │    │     (Team C)    │
+│     (Web App)   │    │  (Desktop App)  │    │   (CLI Tool)    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          └───────────────────────┼───────────────────────┘
                                  │
                                  ▼
-                    ┌─────────────────────┐
-                    │   MCP Gateway       │
-                    │  - Authentication   │
-                    │  - Tool Discovery   │
-                    │  - Health Monitor   │
-                    │  - Request Routing  │
-                    └─────────────────────┘
+                    ┌─────────────────────────┐
+                    │    MCP Gateway          │
+                    │  - Tool Discovery       │
+                    │  - Health Monitor       │
+                    │  - Request Routing      │
+                    │  - Protocol Translation │
+                    └─────────────────────────┘
                                  │
          ┌───────────────────────┼───────────────────────┐
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Weather Server │    │   News Server   │    │ Billing Server  │
+│  Weather Server │    │   News Server   │    │ Custom Server   │
 │     (Port 8001) │    │   (Port 8002)   │    │   (Port 8003)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
@@ -55,18 +54,27 @@ pip install -e .
 
 ### 2. Configuration
 
-Copy the example environment file and customize:
+Create and configure settings for your environment:
 
 ```bash
-cp .env.example .env
-```
+# Server settings
+HOST=0.0.0.0
+PORT=8080
+DEBUG=false
 
-Edit `.env` to configure:
-- Server settings (host, port, debug mode)
-- Authentication (JWT secret, token expiration)
-- MCP servers (host, port, tags for each server)
-- Health monitoring intervals
-- Tool discovery settings
+# MCP Servers to connect to
+MCP_SERVERS__WEATHER__HOST=localhost
+MCP_SERVERS__WEATHER__PORT=8001
+MCP_SERVERS__WEATHER__TAGS=weather,forecast,location
+
+MCP_SERVERS__NEWS__HOST=localhost
+MCP_SERVERS__NEWS__PORT=8002
+MCP_SERVERS__NEWS__TAGS=news,headlines,search
+
+# Health monitoring settings
+HEALTH_CHECK_INTERVAL=30
+HEALTH_TIMEOUT=10
+```
 
 ### 3. Run the Gateway
 
@@ -85,10 +93,6 @@ The gateway will start on `http://localhost:8080` by default.
 
 ## API Endpoints
 
-### Authentication
-
-- `POST /auth/login` - Authenticate and get access token
-
 ### Health Monitoring
 
 - `GET /health` - Gateway health check
@@ -97,7 +101,7 @@ The gateway will start on `http://localhost:8080` by default.
 
 ### Tool Discovery
 
-- `GET /tools` - List all available tools (filtered by permissions)
+- `GET /tools` - List all available tools from all servers
 - `GET /tools/summary` - Get tools summary and statistics
 - `GET /tools/search?q={query}` - Search tools by name or description
 - `POST /tools/{tool_name}/call` - Execute a specific tool
@@ -109,31 +113,24 @@ The gateway will start on `http://localhost:8080` by default.
 
 ## Authentication
 
-The gateway uses JWT-based authentication. Default users:
+## Example Usage
 
-- **admin**: `admin123` - Full access to all tools and servers
-- **team_a**: `team_a123` - Access to weather and news tools
-- **team_b**: `team_b123` - Access to weather tools only
-
-### Login Example
+### List Available Tools
 
 ```bash
-curl -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "team_a", "password": "team_a123"}'
+# Get all available tools
+curl http://localhost:8080/tools
 ```
 
-### Using the Token
+### Check Health Status
 
 ```bash
-# Get tools list
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8080/tools
+# Check gateway health
+curl http://localhost:8080/health
 
-# Call a tool
-curl -X POST http://localhost:8080/tools/get_weather/call \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
+# Check all server health
+curl http://localhost:8080/health/servers
+```
   -d '{"arguments": {"location": "London"}}'
 ```
 
@@ -144,7 +141,6 @@ The gateway is fully MCP protocol compliant:
 ```bash
 # List available tools
 curl -X POST http://localhost:8080/mcp \
-  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -153,17 +149,29 @@ curl -X POST http://localhost:8080/mcp \
     "params": {}
   }'
 
-# Call a tool
+# Call a weather tool
 curl -X POST http://localhost:8080/mcp \
-  -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
     "id": 2,
     "method": "tools/call",
     "params": {
-      "name": "get_weather",
-      "arguments": {"location": "London"}
+      "name": "get_forecast",
+      "arguments": {"latitude": 37.7749, "longitude": -122.4194}
+    }
+  }'
+
+# Call a news tool  
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "search_news",
+      "arguments": {"query": "artificial intelligence", "language": "en"}
     }
   }'
 ```
@@ -221,8 +229,11 @@ MCP_SERVERS__BILLING__TAGS=["billing", "finance"]
 ### Running in Development Mode
 
 ```bash
-# Set debug mode
-export DEBUG=true
+# Set debug mode (Unix/Linux/macOS)
+DEBUG=true
+
+# Set debug mode (Windows PowerShell)
+$env:DEBUG="true"
 
 # Run with auto-reload
 uvicorn mcp_gateway.gateway:create_app --reload --host 0.0.0.0 --port 8080
@@ -234,11 +245,9 @@ uvicorn mcp_gateway.gateway:create_app --reload --host 0.0.0.0 --port 8080
 # Install dev dependencies
 uv pip install -e ".[dev]"
 
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=mcp_gateway --cov-report=html
+# Manual testing with curl
+curl http://localhost:8080/health
+curl http://localhost:8080/tools
 ```
 
 ### Code Quality
@@ -323,8 +332,13 @@ LOG_FORMAT="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 Enable debug mode for detailed logging:
 
 ```bash
-export DEBUG=true
-export LOG_LEVEL=DEBUG
+# Unix/Linux/macOS
+DEBUG=true
+LOG_LEVEL=DEBUG
+
+# Windows PowerShell
+$env:DEBUG="true"
+$env:LOG_LEVEL="DEBUG"
 ```
 
 ## Contributing

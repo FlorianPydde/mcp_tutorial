@@ -4,10 +4,9 @@ Enterprise-ready web client that connects to the MCP Gateway to access multiple 
 
 ## Features
 
-- **Gateway Integration**: Connects to MCP Gateway instead of individual servers
-- **Authentication**: JWT-based authentication with role-based access
+- **Gateway Integration**: Connects to MCP Gateway to access multiple MCP servers
 - **Multi-tool Access**: Access to weather, news, and other tools through single endpoint
-- **Session Management**: Persistent conversation sessions
+- **Session Management**: Persistent conversation sessions with context
 - **Health Monitoring**: Real-time health status of backend services
 - **Azure OpenAI Integration**: Optional chat functionality with tool calling
 - **RESTful API**: Easy-to-use REST endpoints for integration
@@ -26,21 +25,13 @@ pip install -e .
 
 ### 2. Configuration
 
-Copy and configure the environment file:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your settings:
+Create an environment file with your settings:
 
 ```bash
 # MCP Gateway connection
 MCP_GATEWAY_URL=http://localhost:8080
-MCP_USERNAME=team_a
-MCP_PASSWORD=team_a123
 
-# Optional: Azure OpenAI for chat
+# Optional: Azure OpenAI for chat functionality
 AZURE_OPENAI_API_BASE=https://your-resource.openai.azure.com/
 AZURE_OPENAI_API_KEY=your-api-key
 AZURE_OPENAI_DEPLOYMENT_NAME=your-deployment

@@ -236,18 +236,19 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | python weather.py
 
 # Test with curl (HTTP transports)
 curl -X POST http://localhost:8000/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
+  -H "Content-Type: application/json" \  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 ```
 
-### Integration Testing
+### Manual Testing
 
 ```bash
-# Test all transports
-uv run pytest tests/
+# Test MCP endpoints directly
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 
-# Test specific transport
-uv run pytest tests/test_sse_transport.py
+# Test health endpoint
+curl http://localhost:8000/health
 ```
 
 ## 🐳 Docker Configuration

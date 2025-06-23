@@ -54,7 +54,7 @@ This project demonstrates an enterprise-ready MCP (Model Context Protocol) Gatew
 
 ```bash
 # Start all services
-docker-compose up --build
+docker compose up --build
 
 # Services will be available at:
 # - Web Client: http://localhost:3000
@@ -99,21 +99,37 @@ python main.py
 
 ## Usage Examples
 
-### Direct API Calls
+### Gateway API Calls
 
 ```bash
 # List available tools
 curl http://localhost:8080/tools
 
-# Call weather tool
-curl -X POST http://localhost:8080/tools/get_weather/call \
+# Get weather forecast for coordinates (San Francisco)
+curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -d '{"arguments": {"location": "London"}}'
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_forecast",
+      "arguments": {"latitude": 37.7749, "longitude": -122.4194}
+    }
+  }'
 
-# Call news tool
-curl -X POST http://localhost:8080/tools/get_news/call \
+# Get top news headlines for US technology
+curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
-  -d '{"arguments": {"category": "technology"}}'
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get_top_headlines",
+      "arguments": {"country": "us", "category": "technology"}
+    }
+  }'
 ```
 
 ### Web Client Interface
@@ -122,12 +138,10 @@ curl -X POST http://localhost:8080/tools/get_news/call \
 # Chat with AI (requires Azure OpenAI configuration)
 curl -X POST http://localhost:3000/chat \
   -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather in London and latest tech news?"}'
+  -d '{"query": "What is the weather forecast for San Francisco and latest tech news?"}'
 
-# Direct tool calls through web client
-curl -X POST http://localhost:3000/tools/get_weather/call \
-  -H "Content-Type: application/json" \
-  -d '{"location": "Paris"}'
+# Health check for web client
+curl http://localhost:3000/health
 ```
 
 ### Health Monitoring
@@ -222,12 +236,13 @@ MCP_SERVERS__NEWSERVER__ENABLED=true
 - **Error handling** and graceful degradation
 - **Modular architecture** for easy maintenance
 
-### Testing
+### Manual Testing
+
 ```bash
-# Run tests for each component
-cd mcp_gateway && pytest
-cd web_client && pytest  
-cd server && pytest
+# Test the full system with curl commands
+curl http://localhost:8080/health
+curl http://localhost:8080/tools
+curl http://localhost:3000/health
 ```
 
 ## Troubleshooting
@@ -235,7 +250,7 @@ cd server && pytest
 ### Common Issues
 
 1. **Port conflicts**: Ensure ports 3000, 8080, 8001, 8002 are available
-2. **Docker issues**: Run `docker-compose down && docker-compose up --build`
+2. **Docker issues**: Run `docker compose down && docker compose up --build`
 3. **Tool discovery**: Check server health endpoints are responding
 4. **Connection errors**: Verify all services are running and accessible
 
@@ -243,8 +258,13 @@ cd server && pytest
 
 Enable debug logging:
 ```bash
-export DEBUG=true
-export LOG_LEVEL=DEBUG
+# Unix/Linux/macOS
+DEBUG=true
+LOG_LEVEL=DEBUG
+
+# Windows PowerShell
+$env:DEBUG="true"
+$env:LOG_LEVEL="DEBUG"
 ```
 
 ### Health Checks

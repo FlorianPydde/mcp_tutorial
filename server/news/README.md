@@ -61,10 +61,7 @@ Comprehensive information about the news service capabilities, supported countri
 
 2. **Set Environment Variable**
    ```bash
-   # Copy example environment file
-   cp .env.example .env
-   
-   # Edit .env and add your API key
+   # Create environment file and add your API key
    NEWS_API_KEY=your_actual_api_key_here
    ```
 
