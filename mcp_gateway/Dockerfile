@@ -17,8 +17,9 @@ COPY pyproject.toml uv.lock* README.md ./
 # Install dependencies
 RUN uv sync --frozen
 
-# Copy source code
-COPY . .
+# Copy source code (be explicit about what we're copying)
+COPY mcp_gateway/ ./mcp_gateway/
+COPY health.py ./
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash gateway && \

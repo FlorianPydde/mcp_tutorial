@@ -41,3 +41,27 @@ Thumbs.db
 
 # Environment files (keep .env.example)
 .env
+
+# Git files
+.git/
+.gitignore
+
+# Documentation that's not needed in the container
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+*_test.py
+test_*.py
+
+# Development files
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker files (don't copy into container)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
