@@ -1,4 +1,5 @@
-services:  # Weather MCP Server
+services:
+  # Weather MCP Server
   weather-server:
     build:
       context: ./server/weather
@@ -8,6 +9,8 @@ services:  # Weather MCP Server
     environment:
       - PORT=8000
       - HOST=0.0.0.0
+    env_file:
+      - ./server/weather/.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/mcp/"]
       interval: 30s
@@ -15,6 +18,7 @@ services:  # Weather MCP Server
       retries: 3
     networks:
       - mcp-network
+
   # News MCP Server  
   news-server:
     build:
@@ -25,6 +29,8 @@ services:  # Weather MCP Server
     environment:
       - PORT=8000
       - HOST=0.0.0.0
+    env_file:
+      - ./server/news/.env
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/mcp/"]
       interval: 30s
@@ -58,6 +64,7 @@ services:  # Weather MCP Server
       retries: 3
     networks:
       - mcp-network
+
   # Web Client
   web-client:
     build:
@@ -66,13 +73,13 @@ services:  # Weather MCP Server
     ports:
       - "3000:3000"
     environment:
-      - WEATHER_SERVER_URL=http://weather-server:8000/mcp
-      - NEWS_SERVER_URL=http://news-server:8000/mcp
       - HOST=0.0.0.0
       - PORT=3000
+      - MCP_GATEWAY_URL=http://mcp-gateway:8080
+    env_file:
+      - ./web_client/.env
     depends_on:
-      - weather-server
-      - news-server
+      - mcp-gateway
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
