@@ -41,3 +41,26 @@ Thumbs.db
 
 # Environment files (keep .env.example)
 .env
+
+# Git files
+.git/
+.gitignore
+
+# Documentation (except README.md which is required by pyproject.toml)
+DEPLOYMENT.md
+*.md
+!README.md
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Temporary files
+*.tmp
+*.temp
+.temp/

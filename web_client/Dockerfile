@@ -1,29 +1,41 @@
-# Use Python 3.12 slim image
-FROM python:3.12-slim
+# Multi-stage build for better caching and smaller final image
+FROM python:3.12-slim AS base
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies in one layer
 RUN apt-get update && apt-get install -y \
     curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements and README.md first for better caching
-COPY pyproject.toml uv.lock* README.md ./
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Install uv for faster dependency management
-RUN pip install uv
+RUN pip install --no-cache-dir uv
+
+# Create non-root user early
+RUN useradd --create-home --shell /bin/bash --uid 1000 app
+
+# Dependency installation stage
+FROM base AS deps
+
+# Copy only dependency files for better caching
+COPY pyproject.toml uv.lock* README.md ./
 
 # Install dependencies
-RUN uv sync --frozen
+RUN uv sync --frozen --no-dev
 
-# Copy application code
-COPY . .
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
+# Copy only necessary application files (no COPY . .)
+COPY main.py ./
+COPY mcp_client.py ./
+COPY mcp_gateway_client.py ./
+COPY models.py ./
+
+# Set proper ownership
+RUN chown -R app:app /app
+
+# Switch to non-root user
 USER app
 
 # Expose port
