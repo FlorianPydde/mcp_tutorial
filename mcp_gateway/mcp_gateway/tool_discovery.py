@@ -171,15 +171,19 @@ class ToolRegistry:
                             )
 
                             # Store tool object
-                            self.tools[f"{server_name}:{tool_name}"] = tool
-
-                    # Remove tools that are no longer available
+                            self.tools[f"{server_name}:{tool_name}"] = (
+                                tool  # Remove tools that are no longer available
+                            )
+                    new_tools = self.server_tools[server_name]
                     for tool_name in old_tools:
-                        tool_key = f"{server_name}:{tool_name}"
-                        if tool_key in self.tools:
-                            del self.tools[tool_key]
-                        if tool_key in self.tool_schemas:
-                            del self.tool_schemas[tool_key]
+                        if (
+                            tool_name not in new_tools
+                        ):  # Only remove if not in new tools
+                            tool_key = f"{server_name}:{tool_name}"
+                            if tool_key in self.tools:
+                                del self.tools[tool_key]
+                            if tool_key in self.tool_schemas:
+                                del self.tool_schemas[tool_key]
 
                     logger.info(
                         f"Discovered {len(tools_result.tools)} tools from {server_name}: "
