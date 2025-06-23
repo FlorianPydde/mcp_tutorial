@@ -173,16 +173,15 @@ class MCPGateway:
                 return MCPResponse(
                     id=request.id,
                     error={"code": -32603, "message": f"Internal error: {str(e)}"},
-                )
+                )  # Tool execution route
 
-        # Tool execution route
         @self.app.post("/tools/{tool_name}/call")
         async def call_tool(tool_name: str, request: RestToolCallRequest):
             """Call a specific tool via REST API."""
             try:
-                # Find the tool to get its server
-                tool_info = self.tool_registry.get_tool(tool_name)
-                if not tool_info:
+                # Find the server for this tool
+                server_name = self.tool_registry.get_server_for_tool(tool_name)
+                if not server_name:
                     raise HTTPException(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=f"Tool {tool_name} not found",
@@ -270,77 +269,37 @@ class MCPGateway:
 
     async def _execute_tool(self, tool_name: str, arguments: Dict) -> Dict:
         """Execute a tool on the appropriate server."""
-        if not self.http_client:
-            raise RuntimeError("HTTP client not initialized")
-
         # Find which server provides this tool
         server_name = self.tool_registry.get_server_for_tool(tool_name)
         if not server_name:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Tool {tool_name} not found",
-            )  # Check if server is healthy
+            )
+
+        # Check if server is healthy
         if not self.health_monitor.is_server_healthy(server_name):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Server {server_name} is not healthy",
             )
 
-        # Get server configuration
-        server_config = settings.mcp_servers.get(server_name)
-        if not server_config:
+        try:
+            # Use the ToolRegistry's call_tool method with proper MCP protocol
+            result = await self.tool_registry.call_tool(
+                server_name, tool_name, arguments
+            )
+            return result
+        except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Server {server_name} configuration not found",
+                detail=str(e),
             )
-
-        # Make MCP tools/call request to the server
-        url = f"http://{server_config.host}:{server_config.port}{server_config.mcp_endpoint}"
-
-        mcp_request = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {"name": tool_name, "arguments": arguments},
-        }
-
-        try:
-            response = await self.http_client.post(
-                url,
-                json=mcp_request,
-                headers={"Content-Type": "application/json"},
-                timeout=server_config.timeout,
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if "result" in data:
-                    return data["result"]
-                elif "error" in data:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Server error: {data['error'].get('message', 'Unknown error')}",
-                    )
-                else:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Invalid response from server",
-                    )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Server returned HTTP {response.status_code}",
-                )
-
-        except httpx.TimeoutException:
+        except Exception as e:
+            logger.error(f"Tool execution error: {e}")
             raise HTTPException(
-                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                detail=f"Timeout calling server {server_name}",
-            )
-        except httpx.RequestError as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Error connecting to server {server_name}: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Tool execution failed: {str(e)}",
             )
 
     async def startup(self) -> None:

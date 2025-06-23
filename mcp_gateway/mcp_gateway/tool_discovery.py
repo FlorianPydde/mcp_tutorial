@@ -208,6 +208,13 @@ class ToolRegistry:
         """Get tool schema for a specific tool."""
         return self.tool_schemas.get(f"{server_name}:{tool_name}")
 
+    def get_server_for_tool(self, tool_name: str) -> Optional[str]:
+        """Find which server provides a specific tool."""
+        for tool_key, tool in self.tools.items():
+            if tool.name == tool_name:
+                return tool.server_name
+        return None
+
     def has_tool(self, server_name: str, tool_name: str) -> bool:
         """Check if a tool exists on a server."""
         return tool_name in self.server_tools.get(server_name, set())

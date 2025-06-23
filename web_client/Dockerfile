@@ -21,6 +21,10 @@ RUN uv sync --frozen
 # Copy application code
 COPY . .
 
+# Remove Python cache files to ensure fresh code
+RUN find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true \
+    && find . -name "*.pyc" -delete 2>/dev/null || true
+
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app \
     && chown -R app:app /app
